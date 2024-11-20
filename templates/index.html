@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Real-Time Emotion Detection</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        text-align: center;
+        margin: 50px;
+      }
+      #video,
+      #capturedImage,
+      #uploadedImage {
+        width: 300px;
+        height: 225px;
+        margin: 10px;
+        border: 2px solid black;
+        display: none; /* Hide by default */
+      }
+      #output {
+        margin-top: 20px;
+        font-size: 24px;
+      }
+      button,
+      input[type="file"] {
+        margin-top: 20px;
+        padding: 10px 20px;
+        font-size: 18px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Real-Time Emotion Detection</h1>
+
+    <!-- Video feed from the webcam -->
+    <div>
+      <video id="video" autoplay></video>
+      <canvas id="canvas" style="display: none"></canvas>
+      <!-- Captured or uploaded image -->
+      <img id="capturedImage" alt="Captured Image will appear here" />
+      <img id="uploadedImage" alt="Uploaded Image will appear here" />
+    </div>
+
+    <!-- Buttons and input for capturing or uploading an image -->
+    <button onclick="captureImage()">Capture from Webcam</button>
+    <input type="file" accept="image/*" onchange="uploadImage(event)" />
+
+    <!-- Output div for displaying detected emotion as emoji -->
+    <div id="output">Detected emotion will appear here.</div>
+
+    <script>
+      // Function to start the webcam feed
+      const videoElement = document.getElementById("video");
+      const canvasElement = document.getElementById("canvas");
+      const capturedImageElement = document.getElementById("capturedImage");
+      const uploadedImageElement = document.getElementById("uploadedImage");
+      const constraints = { video: true };
+
+      async function startVideo() {
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia(constraints);
+          videoElement.srcObject = stream;
+          videoElement.style.display = "block"; // Show video element
+          capturedImageElement.style.display = "none"; // Hide captured image
+          uploadedImageElement.style.display = "none"; // Hide uploaded image
+        } catch (error) {
+          console.error("Error accessing the webcam: ", error);
+        }
+      }
+
+      startVideo();
+
+      // Capture image from the video feed and send it to the backend
+      function captureImage() {
+        // Draw the current video frame to the canvas
+        canvasElement.width = videoElement.videoWidth;
+        canvasElement.height = videoElement.videoHeight;
+        const context = canvasElement.getContext("2d");
+        context.drawImage(
+          videoElement,
+          0,
+          0,
+          canvasElement.width,
+          canvasElement.height
+        );
+
+        // Convert the canvas image to a data URL and display it as the captured image
+        const imageDataUrl = canvasElement.toDataURL("image/png");
+        capturedImageElement.src = imageDataUrl; // Display the captured image
+        capturedImageElement.style.display = "block";
+        videoElement.style.display = "none"; // Hide video after capture
+        uploadedImageElement.style.display = "none"; // Hide uploaded image
+
+        // Send the captured image to the server for emotion detection
+        detectEmotion(imageDataUrl);
+      }
+
+      // Handle image upload and emotion detection
+      function uploadImage(event) {
+        const file = event.target.files[0];
+        if (file) {
+          const reader = new FileReader();
+          reader.onload = function (e) {
+            const imageDataUrl = e.target.result;
+            uploadedImageElement.src = imageDataUrl;
+            uploadedImageElement.style.display = "block"; // Show uploaded image
+            capturedImageElement.style.display = "none"; // Hide captured image
+            videoElement.style.display = "none"; // Hide video preview
+
+            // Send the uploaded image to the server for emotion detection
+            detectEmotion(imageDataUrl);
+          };
+          reader.readAsDataURL(file);
+        }
+      }
+
+      // Function to send image data to the server for emotion detection
+      function detectEmotion(imageDataUrl) {
+        fetch("/capture", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ image: imageDataUrl }), // Send the base64-encoded image data
+        })
+          .then((response) => response.json())
+          .then((data) => {
+            if (data.error) {
+              document.getElementById(
+                "output"
+              ).innerHTML = `Error: ${data.error}`;
+            } else {
+              // Display the emotion emoji
+              const emotionEmoji = getEmojiForEmotion(data.emotion);
+              document.getElementById(
+                "output"
+              ).innerHTML = `Detected Emotion: <img src="${emotionEmoji}" alt="Emotion" width="50" />`;
+            }
+          })
+          .catch((error) => console.error("Error:", error));
+      }
+
+      // Function to map detected emotion to an emoji image
+      function getEmojiForEmotion(emotion) {
+        const emotionEmojiMap = {
+          Angry: "emojis/angry.png",
+          Disgusted: "emojis/disgusted.png",
+          Fearful: "emojis/fearful.png",
+          Happy: "emojis/happy.png",
+          Neutral: "emojis/neutral.png",
+          Sad: "emojis/sad.png",
+          Surprised: "emojis/surprised.png",
+        };
+
+        const emojiPath = emotionEmojiMap[emotion];
+
+        if (!emojiPath) {
+          console.error(`No emoji found for emotion: ${emotion}`);
+          return "🤔"; // Default emoji
+        }
+
+        return emojiPath;
+      }
+    </script>
+  </body>
+</html>
